@@ -22,7 +22,7 @@ extern int fs_readdir(const char *, void *, fuse_fill_dir_t,
 
 extern int fs_mkdir(const char *, mode_t);
 extern int fs_rmdir(const char *);
-
+int fs_unlink(const char *);
 /* GETATTR */
 static int fs_getattr(const char *path, struct stat *stbuf,
                       struct fuse_file_info *fi)
@@ -38,13 +38,6 @@ static int fs_getattr(const char *path, struct stat *stbuf,
     if (lstat(resolved, stbuf) == -1)
         return -errno;
 
-    return 0;
-}
-
-/* Placeholder unlink (P4 will implement) */
-static int fs_unlink(const char *path)
-{
-    (void) path;
     return 0;
 }
 
