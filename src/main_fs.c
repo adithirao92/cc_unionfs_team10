@@ -1,24 +1,33 @@
 #define FUSE_USE_VERSION 31
-#include <stdlib.h>
+
 #include <fuse.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include "../include/fs_state.h"
 
-// Function declarations
-int resolve_path(const char *path, char *resolved_path);
-int fs_open(const char *, struct fuse_file_info *);
-int fs_read(const char *, char *, size_t, off_t, struct fuse_file_info *);
-int fs_write(const char *, const char *, size_t, off_t, struct fuse_file_info *);
+/* External functions from other source files */
+extern int resolve_path(const char *path, char *resolved_path);
 
-// Global state pointer
-struct unionfs_state *global_state;
+extern int fs_open(const char *, struct fuse_file_info *);
+extern int fs_read(const char *, char *, size_t, off_t, struct fuse_file_info *);
+extern int fs_write(const char *, const char *, size_t, off_t, struct fuse_file_info *);
 
-// GETATTR
+extern int fs_readdir(const char *, void *, fuse_fill_dir_t,
+                      off_t, struct fuse_file_info *,
+                      enum fuse_readdir_flags);
+
+extern int fs_mkdir(const char *, mode_t);
+extern int fs_rmdir(const char *);
+
+/* GETATTR */
 static int fs_getattr(const char *path, struct stat *stbuf,
-                      struct fuse_file_info *fi) {
+                      struct fuse_file_info *fi)
+{
+    (void) fi;
 
     char resolved[1024];
     int res = resolve_path(path, resolved);
@@ -32,46 +41,59 @@ static int fs_getattr(const char *path, struct stat *stbuf,
     return 0;
 }
 
-// UNLINK placeholder (P4 will implement)
-static int fs_unlink(const char *path) {
+/* Placeholder unlink (P4 will implement) */
+static int fs_unlink(const char *path)
+{
+    (void) path;
     return 0;
 }
 
-// FUSE operations struct
+/* FUSE operations */
 static struct fuse_operations fs_ops = {
     .getattr = fs_getattr,
     .open    = fs_open,
     .read    = fs_read,
     .write   = fs_write,
+    .readdir = fs_readdir,
+    .mkdir   = fs_mkdir,
+    .rmdir   = fs_rmdir,
     .unlink  = fs_unlink,
 };
 
-// MAIN FUNCTION
-int main(int argc, char *argv[]) {
+/* MAIN */
+int main(int argc, char *argv[])
+{
     if (argc < 4) {
-        fprintf(stderr, "Usage: %s <lower_dir> <upper_dir> <mountpoint>\n", argv[0]);
+        fprintf(stderr,
+                "Usage: %s <lower_dir> <upper_dir> <mountpoint> [-f]\n",
+                argv[0]);
         return 1;
     }
 
-    // Allocate memory for state
     struct unionfs_state *state = malloc(sizeof(struct unionfs_state));
     if (!state) {
         perror("malloc failed");
         return 1;
     }
 
-    state->lower_dir = argv[1];
-    state->upper_dir = argv[2];
+    state->lower_dir = realpath(argv[1], NULL);
+    state->upper_dir = realpath(argv[2], NULL);
 
-    // Save globally (so other files can access if needed)
-    global_state = state;
+    if (!state->lower_dir || !state->upper_dir) {
+        fprintf(stderr, "Error resolving lower/upper directories\n");
+        return 1;
+    }
 
-    // Shift arguments for FUSE
-    // argv[1] = mountpoint
-    argv[1] = argv[3];
+    /* Build argv for FUSE */
+    char *fuse_argv[argc];
+    int fuse_argc = 0;
 
-    // Adjust argc
-    argc = 2;
+    fuse_argv[fuse_argc++] = argv[0];   // program name
+    fuse_argv[fuse_argc++] = argv[3];   // mountpoint
 
-    return fuse_main(argc, argv, &fs_ops, state);
+    for (int i = 4; i < argc; i++) {
+        fuse_argv[fuse_argc++] = argv[i];
+    }
+
+    return fuse_main(fuse_argc, fuse_argv, &fs_ops, state);
 }
