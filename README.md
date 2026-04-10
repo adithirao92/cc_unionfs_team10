@@ -203,24 +203,3 @@ It provides hands-on experience with:
 * Linux file handling
 
 ---
-
-##  Future Improvements
-
-* Support nested directories in whiteout
-* Add logging and debugging tools
-* Improve performance
-* Handle permissions and metadata fully
-
----
-
-##  Acknowledgements
-
-* FUSE Documentation
-* Linux Filesystem Concepts
-* Course instructors and lab material
-
----
-
-## ⭐ If you like this project
-
-Give it a ⭐ on GitHub!
