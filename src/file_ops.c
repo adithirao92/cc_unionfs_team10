@@ -5,7 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-
+#include "../include/fs_state.h" 
 int resolve_path(const char *path, char *resolved_path);
 
 // Copy file from lower_dir → upper_dir
@@ -29,6 +29,33 @@ static int copy_to_upper(const char *src, const char *dest) {
 }
 
 // OPEN with CoW
+//int fs_open(const char *path, struct fuse_file_info *fi) {
+  //  char resolved[1024];
+    //int res = resolve_path(path, resolved);
+
+    //if (res != 0)
+      //  return res;
+
+    // If writing → ensure file is in upper layer
+   // if ((fi->flags & O_WRONLY) || (fi->flags & O_RDWR)) {
+        // If file is from lower layer → copy needed
+     //   if (strstr(resolved, "lower")) {
+       //     char upper_path[1024];
+         //   snprintf(upper_path, sizeof(upper_path), "./upper%s", path);
+
+           // copy_to_upper(resolved, upper_path);
+            //strcpy(resolved, upper_path);
+       // }
+   // }
+
+    //int fd = open(resolved, fi->flags);
+    //if (fd < 0)
+      //  return -errno;
+
+    //close(fd);
+   // return 0;
+//}
+
 int fs_open(const char *path, struct fuse_file_info *fi) {
     char resolved[1024];
     int res = resolve_path(path, resolved);
@@ -36,17 +63,24 @@ int fs_open(const char *path, struct fuse_file_info *fi) {
     if (res != 0)
         return res;
 
-    // If writing → ensure file is in upper layer
-    if ((fi->flags & O_WRONLY) || (fi->flags & O_RDWR)) {
-        // If file is from lower layer → copy needed
-        if (strstr(resolved, "lower")) {
-            char upper_path[1024];
-            snprintf(upper_path, sizeof(upper_path), "./upper%s", path);
+    struct fuse_context *ctx = fuse_get_context();
+    struct unionfs_state *state = ctx->private_data;
 
-            copy_to_upper(resolved, upper_path);
-            strcpy(resolved, upper_path);
-        }
+    if (fi->flags & (O_WRONLY | O_RDWR)) {
+
+    printf("WRITE detected for %s\n", path);
+
+    char lower_path[1024], upper_path[1024];
+    snprintf(lower_path, sizeof(lower_path), "%s%s", state->lower_dir, path);
+    snprintf(upper_path, sizeof(upper_path), "%s%s", state->upper_dir, path);
+
+    if (access(lower_path, F_OK) == 0 && access(upper_path, F_OK) != 0) {
+        printf("Copying from lower to upper\n");
+        copy_to_upper(lower_path, upper_path);
     }
+
+    strcpy(resolved, upper_path);
+}
 
     int fd = open(resolved, fi->flags);
     if (fd < 0)

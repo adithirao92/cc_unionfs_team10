@@ -15,38 +15,34 @@ int fs_unlink(const char *path) {
     struct fuse_context *ctx = fuse_get_context();
     struct unionfs_state *state = ctx->private_data;
 
-    char upper_path[4096];
-    char lower_path[4096];
-    char whiteout_path[4096];
+    char upper_path[1024];
+    char lower_path[1024];
+    char whiteout_path[1024];
 
     snprintf(upper_path, sizeof(upper_path), "%s%s", state->upper_dir, path);
     snprintf(lower_path, sizeof(lower_path), "%s%s", state->lower_dir, path);
 
-    printf("UNLINK: path=%s\n", path);
+    // extract filename
+    const char *name = strrchr(path, '/');
+    name = name ? name + 1 : path;
 
-    // Case 1: file exists in upper → delete directly
+    snprintf(whiteout_path, sizeof(whiteout_path),
+             "%s/.wh.%s", state->upper_dir, name);
+
+    printf("UNLINK called for %s\n", path);
+
+    // Case 1: exists in upper → delete normally
     if (access(upper_path, F_OK) == 0) {
         printf("Deleting from upper\n");
-        if (unlink(upper_path) == -1)
-            return -errno;
-        return 0;
+        return unlink(upper_path) == 0 ? 0 : -errno;
     }
 
-    // Case 2: file exists in lower → create whiteout
+    // Case 2: exists in lower → create whiteout
     if (access(lower_path, F_OK) == 0) {
+        printf("Creating whiteout\n");
 
-        // Extract filename
-        const char *name = strrchr(path, '/');
-        name = name ? name + 1 : path;
-
-        // Create whiteout in upper root
-        snprintf(whiteout_path, sizeof(whiteout_path),
-                 "%s/.wh.%s", state->upper_dir, name);
-
-        printf("Creating whiteout: %s\n", whiteout_path);
-
-        int fd = open(whiteout_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (fd == -1)
+        int fd = open(whiteout_path, O_CREAT | O_WRONLY, 0644);
+        if (fd < 0)
             return -errno;
 
         close(fd);
